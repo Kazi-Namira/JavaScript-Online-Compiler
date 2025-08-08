@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>JavaScript Online Compiler</title>
+    <link rel="icon" href="favicon.png" type="image/png" />
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
+    <script>
+      require.config({
+        paths: {
+          vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs",
+        },
+      });
+      window.MonacoEnvironment = {
+        getWorkerUrl: () =>
+          `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+        self.MonacoEnvironment = { baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/' };
+        importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/base/worker/workerMain.min.js');
+      `)}`,
+      };
+
+      let editor;
+      require(["vs/editor/editor.main"], function () {
+        editor = monaco.editor.create(document.getElementById("editor"), {
+          value: `// Write your JavaScript code here\nconsole.log('Hello, Namira!');`,
+          language: "javascript",
+          theme: "vs-dark",
+          fontSize: 16,
+          automaticLayout: true,
+          minimap: { enabled: false },
+        });
+        window.editor = editor; // expose globally for ease
+      });
+    </script>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background-color: black;
+        font-family: monospace;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #editor {
+        height: 70vh;
+        border-bottom: 2px solid #444;
+      }
+      .controls {
+        padding: 10px;
+        background-color: #111;
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      button {
+        padding: 8px 16px;
+        font-size: 16px;
+        border: none;
+        border-radius: 4px;
+        background-color: #a2d3b3ed;
+        color: black;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        min-width: 140px;
+      }
+      button:hover {
+        background-color: lightblue;
+      }
+      .output {
+        background-color: black;
+        color: lime;
+        padding: 15px;
+        height: 20vh;
+        overflow: auto;
+        border-top: 1px solid #333;
+        white-space: pre-wrap;
+        font-family: monospace;
+      }
+
+      body,
+      .controls,
+      .output,
+      #editor {
+        transition: background-color 0.5s ease, color 0.5s ease;
+      }
+
+      body.fade-out,
+      #editor.fade-out,
+      .controls.fade-out,
+      .output.fade-out {
+        opacity: 0;
+        transition: opacity 0.25s ease;
+      }
+
+      body.fade-in,
+      #editor.fade-in,
+      .controls.fade-in,
+      .output.fade-in {
+        opacity: 1;
+        transition: opacity 0.25s ease;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <button onclick="runCode()">▶ Run Code</button>
+      <button onclick="clearOutput()">Clear Output</button>
+      <button onclick="toggleTheme()" id="themeBtn">Light Theme</button>
+    </div>
+    <div id="editor"></div>
+    <pre class="output" id="output">💡 Output will appear here...</pre>
+
+    <script>
+      let decorations = [];
+
+      function runCode() {
+        const code = editor.getValue();
+        const outputDiv = document.getElementById("output");
+        outputDiv.textContent = "⏳ Running...";
+
+        // Clear previous error markers
+        decorations = editor.deltaDecorations(decorations, []);
+
+        try {
+          const logs = [];
+          const customConsole = {
+            log: (...args) => logs.push(args.join(" ")),
+            error: (...args) => logs.push("Error: " + args.join(" ")),
+            warn: (...args) => logs.push("Warning: " + args.join(" ")),
+          };
+          const fn = new Function("console", code);
+          fn(customConsole);
+          outputDiv.textContent =
+            logs.join("\n") || "✅ Code ran with no output.";
+        } catch (error) {
+          outputDiv.textContent = "❌ Runtime Error:\n" + error.message;
+          highlightError(error);
+        }
+      }
+
+      function clearOutput() {
+        document.getElementById("output").textContent =
+          "💡 Output will appear here...";
+        decorations = editor.deltaDecorations(decorations, []); // clear markers
+      }
+
+      // Highlight runtime error line with red underline and tooltip
+      function highlightError(error) {
+        const message = error.message || "Error";
+        let lineNumber = 1; // default
+
+        // Try to parse line number from error stack (may vary by browser)
+        if (error.stack) {
+          const match = error.stack.match(/<anonymous>:(\d+):\d+/);
+          if (match) {
+            lineNumber = parseInt(match[1], 10);
+          }
+        }
+
+        decorations = editor.deltaDecorations(decorations, [
+          {
+            range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+            options: {
+              isWholeLine: true,
+              className: "errorLine",
+              glyphMarginClassName: "errorGlyph",
+              hoverMessage: { value: "**Runtime Error:** " + message },
+              linesDecorationsClassName: "errorLineDecoration",
+            },
+          },
+        ]);
+      }
+
+      // Theme toggle between dark and light
+      let isDark = true;
+
+      function toggleTheme() {
+        const themeBtn = document.getElementById("themeBtn");
+        const editorDiv = document.getElementById("editor");
+        const outputDiv = document.querySelector(".output");
+        const controlsDiv = document.querySelector(".controls");
+
+        // Add fade-out class to trigger animation
+        document.body.classList.add("fade-out");
+        editorDiv.classList.add("fade-out");
+        controlsDiv.classList.add("fade-out");
+        outputDiv.classList.add("fade-out");
+
+        setTimeout(() => {
+          if (isDark) {
+            // Light mode
+            monaco.editor.setTheme("vs-light");
+            themeBtn.textContent = "🌙 Dark Theme";
+            document.body.style.backgroundColor = "#ffffff";
+            editorDiv.style.backgroundColor = "#f3f3f3";
+            controlsDiv.style.backgroundColor = "#eaeaea";
+            outputDiv.style.backgroundColor = "#f9f9f9";
+            outputDiv.style.color = "#111";
+          } else {
+            // Dark mode
+            monaco.editor.setTheme("vs-dark");
+            themeBtn.textContent = "🌞 Light Theme";
+            document.body.style.backgroundColor = "#1e1e1e";
+            editorDiv.style.backgroundColor = "#1e1e1e";
+            controlsDiv.style.backgroundColor = "#111";
+            outputDiv.style.backgroundColor = "#000000";
+            outputDiv.style.color = "lime";
+          }
+
+          // Switch fade to fade-in
+          document.body.classList.remove("fade-out");
+          editorDiv.classList.remove("fade-out");
+          controlsDiv.classList.remove("fade-out");
+          outputDiv.classList.remove("fade-out");
+
+          document.body.classList.add("fade-in");
+          editorDiv.classList.add("fade-in");
+          controlsDiv.classList.add("fade-in");
+          outputDiv.classList.add("fade-in");
+
+          isDark = !isDark;
+        }, 250); // wait for fade-out before switching theme
+      }
+    </script>
+
+    <style>
+      /* Error line highlight styles */
+      .errorLine {
+        background-color: rgba(255, 0, 0, 0.2);
+      }
+      .errorGlyph {
+        background: url('data:image/svg+xml;utf8,<svg fill="red" height="16" viewBox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="6"/></svg>')
+          no-repeat center center;
+      }
+      .errorLineDecoration {
+        border-left: 3px solid red;
+      }
+    </style>
+  </body>
+</html>
